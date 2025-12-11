@@ -205,25 +205,22 @@ Built using **zero dependencies**.
 
 ---
 
-# 🤝 Contributing
+# Contributing
 
 Feel free to submit issues or enhancements.
 New workflow examples are especially welcome!
 
 ---
 
-# 📄 License
+# License
 
 MIT License — free to use, modify, and distribute.
 
 ---
 
-# 🎉 Final Note
+# Final Note
 
 **CodeX — Code Review Agent** demonstrates backend architecture, workflow orchestration, structured state handling, and clean system design.
 
 ---
 
-```
-
----
