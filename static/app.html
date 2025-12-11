@@ -1,0 +1,282 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <title>Code Review Application</title>
+
+    <style>
+        body {
+            font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI";
+            margin: 0;
+            background: #0f172a;
+            color: #e5e7eb;
+        }
+
+        .container {
+            max-width: 1100px;
+            margin: 0 auto;
+            padding: 24px 16px 60px;
+        }
+
+        h1 {
+            font-size: 1.9rem;
+        }
+
+        .subtitle {
+            color: #94a3b8;
+            margin-bottom: 18px;
+        }
+
+        textarea {
+            width: 100%;
+            min-height: 220px;
+            background: #020617;
+            color: #e5e7eb;
+            border-radius: 8px;
+            border: 1px solid #1f2937;
+            padding: 12px;
+            font-family: "JetBrains Mono", Menlo, monospace;
+            font-size: 0.9rem;
+            resize: vertical;
+            box-sizing: border-box;
+        }
+
+        button {
+            padding: 9px 18px;
+            background: #22c55e;
+            border: none;
+            border-radius: 999px;
+            cursor: pointer;
+            color: #022c22;
+            font-weight: 600;
+        }
+
+        button:hover {
+            background: #16a34a;
+        }
+
+        #status {
+            margin-left: 12px;
+            color: #9ca3af;
+            font-size: 0.85rem;
+        }
+
+        .row {
+            margin-top: 14px;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            flex-wrap: wrap;
+        }
+
+        .card {
+            background: #020617;
+            border: 1px solid #1f2937;
+            padding: 16px;
+            border-radius: 10px;
+            margin-top: 16px;
+        }
+
+        .columns {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 16px;
+            margin-top: 16px;
+        }
+
+        @media(max-width: 900px) {
+            .columns {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        pre {
+            background: #020617;
+            padding: 10px;
+            border-radius: 8px;
+            border: 1px solid #1f2937;
+            font-size: 0.85rem;
+            overflow: auto;
+        }
+
+        .log-entry {
+            border-bottom: 1px dashed #1f2937;
+            padding: 6px 0;
+            font-size: 0.85rem;
+            color: #a5b4fc;
+        }
+
+        .score-pill {
+            display: inline-flex;
+            align-items: center;
+            margin-left: 8px;
+            padding: 3px 8px;
+            border-radius: 999px;
+            font-size: 0.8rem;
+            background: #022c22;
+            color: #bbf7d0;
+            border: 1px solid #16a34a;
+        }
+    </style>
+</head>
+
+<body>
+
+<div class="container">
+    <h1>Code Review Application</h1>
+    <div class="subtitle">Run the code through the workflow engine and inspect results.</div>
+
+    <textarea id="code-input">def foo(x):
+    # TODO improve
+    for i in range(10):
+        if x > 0:
+            x += i
+    return x</textarea>
+
+    <div class="row">
+        <button id="run-btn">Run Review</button>
+        <button onclick="clearOutput()" style="background:#334155;color:#e2e8f0;">Clear</button>
+        <span id="status"></span>
+    </div>
+
+    <div class="columns">
+        <div class="card">
+            <h3>
+                Suggestions
+                <span id="score-pill" class="score-pill" style="display:none;"></span>
+            </h3>
+            <div id="suggestions-block">
+                <em>No results yet.</em>
+            </div>
+        </div>
+
+        <div class="card">
+            <h3>Execution Log</h3>
+            <div id="log-block">
+                <em>No log entries yet.</em>
+            </div>
+        </div>
+    </div>
+
+    <div class="card">
+        <h3>Raw State Output</h3>
+        <pre id="raw-state">{}</pre>
+    </div>
+</div>
+
+<script>
+    const codeInput = document.getElementById("code-input");
+    const runBtn = document.getElementById("run-btn");
+    const statusEl = document.getElementById("status");
+    const suggestionsBlock = document.getElementById("suggestions-block");
+    const logBlock = document.getElementById("log-block");
+    const rawStateEl = document.getElementById("raw-state");
+    const scorePill = document.getElementById("score-pill");
+
+
+    function setStatus(text) {
+        statusEl.textContent = text;
+    }
+
+    function clearOutput() {
+        suggestionsBlock.innerHTML = "<em>No results yet.</em>";
+        logBlock.innerHTML = "<em>No log entries yet.</em>";
+        rawStateEl.textContent = "{}";
+        if (scorePill) {
+            scorePill.style.display = "none";
+            scorePill.textContent = "";
+        }
+        setStatus("");
+    }
+
+
+    async function runReview() {
+        const code = codeInput.value;
+
+        if (!code.trim()) {
+            setStatus("Please enter code first.");
+            return;
+        }
+
+        setStatus("Running...");
+        runBtn.disabled = true;
+        runBtn.textContent = "Running...";
+
+        const payload = {
+            graph_id: "code_review_v1",
+            initial_state: { code }
+        };
+
+        try {
+            const response = await fetch("/graph/run", {
+                method: "POST",
+                headers: {"Content-Type": "application/json"},
+                body: JSON.stringify(payload)
+            });
+
+            const data = await response.json();
+
+            if (!response.ok) {
+                setStatus(`Error: ${response.status}`);
+                console.error("Error response:", data);
+            } else {
+                const state = data.final_state;
+                const log = data.log || [];
+
+                // Show quality score if present
+                if (scorePill) {
+                    const score = state.quality_score;
+                    if (typeof score === "number") {
+                        scorePill.style.display = "inline-flex";
+                        scorePill.textContent = `Score: ${score}/100`;
+                    } else {
+                        scorePill.style.display = "none";
+                        scorePill.textContent = "";
+                    }
+                }
+
+                // Suggestions
+                if (state.suggestions && state.suggestions.length > 0) {
+                    let html = "<ul>";
+                    for (const s of state.suggestions) {
+                        html += `<li>${s}</li>`;
+                    }
+                    html += "</ul>";
+                    suggestionsBlock.innerHTML = html;
+                } else {
+                    suggestionsBlock.innerHTML = "<em>No suggestions.</em>";
+                }
+
+                // Logs
+                if (log.length === 0) {
+                    logBlock.innerHTML = "<em>No log entries yet.</em>";
+                } else {
+                    let html = "";
+                    for (const entry of log) {
+                        const summary = entry.summary || "";
+                        html += `
+                            <div class="log-entry">
+                                [${entry.step}] ${entry.node_id} → ${summary}
+                            </div>`;
+                    }
+                    logBlock.innerHTML = html;
+                }
+
+                rawStateEl.textContent = JSON.stringify(state, null, 2);
+
+                setStatus(`Run complete · Run ID: ${data.run_id}`);
+            }
+        } catch (err) {
+            console.error(err);
+            setStatus("Error occurred (see console).");
+        }
+
+        runBtn.disabled = false;
+        runBtn.textContent = "Run Review";
+    }
+
+    runBtn.addEventListener("click", runReview);
+</script>
+
+</body>
+</html>
